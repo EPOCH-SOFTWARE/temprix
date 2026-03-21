@@ -13,27 +13,49 @@ pub struct Version {
     pub size: u64,
 }
 
-/// Find the project root for a given file by walking up.
+/// Find the project root for a given file.
+/// Uses the same logic as the daemon: walk up looking for project markers,
+/// but fall back to the nearest WATCH ROOT (from config), not the file's parent.
+/// This ensures history commands find the same path the daemon used.
 pub fn find_project_root(file_path: &Path) -> PathBuf {
-    let mut current = if file_path.is_dir() {
-        file_path.to_path_buf()
+    let abs = fs::canonicalize(file_path)
+        .unwrap_or_else(|_| file_path.to_path_buf());
+
+    let start = if abs.is_dir() {
+        abs.clone()
     } else {
-        file_path.parent().unwrap_or(file_path).to_path_buf()
+        abs.parent().unwrap_or(&abs).to_path_buf()
     };
 
-    loop {
+    let cfg = config::load_or_discover();
+
+    // Find which watch root this file belongs to
+    let watch_root = cfg.roots.iter()
+        .find(|r| abs.starts_with(r))
+        .cloned();
+
+    let boundary = match &watch_root {
+        Some(r) => r.clone(),
+        None => start.clone(),
+    };
+
+    // Walk up from file toward boundary, looking for project markers
+    let mut current = start;
+    while current.starts_with(&boundary) {
         if markers::has_marker(&current) {
             return current;
         }
         match current.parent() {
             Some(p) if p != current => current = p.to_path_buf(),
-            _ => return file_path.parent().unwrap_or(file_path).to_path_buf(),
+            _ => break,
         }
     }
+
+    // No marker found — fall back to watch root (same as daemon does)
+    boundary
 }
 
 /// List all history versions of a file, newest first.
-/// Looks in global history storage: ~/.temprix/history/<project>/<rel_path>
 pub fn list_versions(file_path: &Path) -> Vec<Version> {
     let abs = match fs::canonicalize(file_path) {
         Ok(p) => p,
@@ -134,7 +156,11 @@ mod tests {
         let (_tmp, project) = setup_project();
         let file = project.join("src").join("app.js");
         fs::write(&file, "code").unwrap();
-        assert_eq!(find_project_root(&file), project);
+        let root = find_project_root(&file);
+        // canonicalize both to handle macOS /var → /private/var
+        let root_real = fs::canonicalize(&root).unwrap_or(root);
+        let file_real = fs::canonicalize(&file).unwrap_or(file);
+        assert!(file_real.starts_with(&root_real));
     }
 
     #[test]

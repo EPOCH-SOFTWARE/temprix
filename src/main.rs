@@ -257,7 +257,9 @@ fn main() {
                 eprintln!("  No projects found.");
                 eprintln!("  Run: temprix roots add ~/your-code-folder");
                 eprintln!();
-                return;
+                // Non-zero: nothing is being watched. TEMPRIX.app shows
+                // this to the user instead of "TEMPRIX is running".
+                process::exit(1);
             }
 
             eprintln!(
@@ -278,7 +280,10 @@ fn main() {
                     eprintln!("  \x1b[2mEvery file change is now versioned instantly.\x1b[0m");
                     eprintln!("  \x1b[2mZero-copy APFS clones. Zero disk overhead.\x1b[0m");
                 }
-                Err(e) => eprintln!("  \x1b[31m✗\x1b[0m {}", e),
+                Err(e) => {
+                    eprintln!("  \x1b[31m✗\x1b[0m {}", e);
+                    process::exit(1);
+                }
             }
             eprintln!();
         }

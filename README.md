@@ -6,7 +6,7 @@
     No disk overhead · No CPU usage · No configuration
   </p>
   <p align="center">
-    <a href="#install">📦 Install</a> · <a href="#commands">⌨️ Commands</a> · <a href="#how-it-works">🔍 How It Works</a> · <a href="LICENSE">📄 License</a>
+    <a href="#install">📦 Install</a> · <a href="#finder">🖱️ Finder</a> · <a href="#commands">⌨️ Commands</a> · <a href="#how-it-works">🔍 How It Works</a> · <a href="LICENSE">📄 License</a>
   </p>
 </p>
 
@@ -44,20 +44,20 @@ Benchmarked on Apple Silicon, 100 iterations per file size:
 
 ## 📦 Install
 
+**🛠️ Build from source:**
+
 ```bash
-# Build from source
 git clone https://github.com/EPOCH-SOFTWARE/temprix.git
 cd temprix
-cargo build --release
 
-# Copy to PATH
-cp target/release/temprix ~/.local/bin/
-
-# Install (auto-discovers projects, starts on login, runs forever)
-temprix install
+# Builds TEMPRIX.app into ~/Applications, links `temprix` into ~/.local/bin,
+# enables the Finder menu item, discovers projects, starts the daemon
+make install
 ```
 
 That's it. You never touch it again.
+
+**🗑️ Uninstall:** run `temprix uninstall`, then move TEMPRIX to the Trash (or `make uninstall` for a source build). Your history in `~/.temprix` is kept.
 
 ## 🔍 How It Works
 
@@ -82,6 +82,21 @@ That's it. You never touch it again.
 ```
 
 > 🛡️ Delete your project folder — versions survive in `~/.temprix/history/`.
+
+## 🖱️ Finder
+
+Right-click any file or folder → **Show TEMPRIX History**. It sits in the main menu, not under Quick Actions.
+
+| You right-click | What opens |
+|---|---|
+| 📄 **One file** | A folder holding only that file's versions, named like `2026-10-27 12.43.01 content.pdf`, newest selected. Press Space to Quick Look, then arrow keys to step through versions. Drag one out to keep it. |
+| 📁 **One folder** (or a folder window's empty background) | That folder's history, including versions of files since deleted from it. |
+| 🗂️ **Several items** | One window: a subfolder of versions per file, a link to each folder's history. Items without history are skipped. |
+| 🤷 **Nothing with history** | The standard alert sound. No window, no notification. |
+
+The version folder is built from APFS clones in `~/.temprix/views/`, so it takes no extra disk space. It's rebuilt each time you open it; deleting it never affects your history.
+
+> The menu item is a Finder Sync extension inside `TEMPRIX.app`. macOS runs extensions in a sandbox that can't run the CLI, so the click is forwarded as a `temprix://reveal` URL to the app, which runs `temprix reveal` and quits. When nothing has history, the reason is in `log show --predicate 'subsystem == "com.temprix.app"'`. If the item doesn't appear, check it's switched on in System Settings → General → Login Items & Extensions.
 
 ## ⌨️ Commands
 
@@ -122,8 +137,8 @@ Everything inside your project roots **except**:
 
 ## 📋 Requirements
 
-- 🍎 macOS 10.13+ (APFS required — default since High Sierra 2017)
-- 🦀 Rust 1.70+ (to build from source)
+- 🍎 macOS 12+ on APFS (the default file system since High Sierra, 2017)
+- 🦀 To build: Rust stable (built and tested with 1.87) and Xcode Command Line Tools, for `swiftc` (builds the Finder extension)
 
 ## 🆚 How is this different from...
 
@@ -154,7 +169,7 @@ macOS kernel (FSEvents)
   ~/.temprix/history/<project>/<path>_<timestamp>.<ext>
 ```
 
-> 6 source files · 1 dependency (`notify` for FSEvents) · 643 KB binary · No runtime
+> 10 Rust files + 2 Swift files (the Finder menu item) · 5 dependencies · 708 KB CLI on Apple Silicon · No runtime
 
 ## 📄 License
 

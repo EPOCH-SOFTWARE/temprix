@@ -21,6 +21,11 @@ const SKIP: &[&str] = &[
     ".zsh_sessions", ".ssh", ".gnupg", ".cups",// system dotfiles
 ];
 
+/// Directories where files land without the user choosing them (browser
+/// downloads, screenshots). Projects inside are watched individually;
+/// the directory itself is never a root, or every download gets versioned.
+const DROP_ZONES: &[&str] = &["Downloads", "Desktop"];
+
 #[derive(Serialize, Deserialize)]
 pub struct Config {
     pub roots: Vec<PathBuf>,
@@ -31,10 +36,21 @@ pub struct Config {
     /// Versions are stored as: {history_path}/{project_name}/{relative_path}
     #[serde(default = "default_history_path")]
     pub history_path: PathBuf,
+    /// Files larger than this are never versioned.
+    /// Source code is almost never over a few MB; files above this are
+    /// videos, archives, disk images, and growing logs. A clone is free
+    /// only until the original is rewritten or deleted — after that every
+    /// version owns its blocks, so a 2 GB download costs 2 GB per version.
+    #[serde(default = "default_max_file_size")]
+    pub max_file_size: u64,
 }
 
 fn default_history_path() -> PathBuf {
     dirs_home().join(".temprix").join("history")
+}
+
+fn default_max_file_size() -> u64 {
+    10 * 1024 * 1024
 }
 
 /// Get the history storage directory for a specific project.
@@ -107,10 +123,15 @@ pub fn load_or_discover() -> Config {
 pub fn discover_and_save() -> Config {
     let home = dirs_home();
     let (roots, projects) = discover_roots(&home);
+    // Re-scanning replaces roots only — user-tuned settings survive.
+    let existing = fs::read_to_string(config_path())
+        .ok()
+        .and_then(|data| serde_json::from_str::<Config>(&data).ok());
     let cfg = Config {
         roots,
         discovered_projects: projects,
-        history_path: default_history_path(),
+        history_path: existing.as_ref().map_or_else(default_history_path, |c| c.history_path.clone()),
+        max_file_size: existing.as_ref().map_or_else(default_max_file_size, |c| c.max_file_size),
     };
     save(&cfg);
     cfg
@@ -180,6 +201,17 @@ fn discover_roots(home: &Path) -> (Vec<PathBuf>, usize) {
             continue;
         }
 
+        if DROP_ZONES.contains(&name_str) {
+            for child in fs::read_dir(&path).into_iter().flatten().flatten() {
+                let cpath = child.path();
+                if cpath.is_dir() && markers::has_marker(&cpath) {
+                    roots.push(cpath);
+                    total += 1;
+                }
+            }
+            continue;
+        }
+
         let mut count = 0;
         if let Ok(children) = fs::read_dir(&path) {
             for child in children.flatten() {
@@ -203,4 +235,45 @@ fn discover_roots(home: &Path) -> (Vec<PathBuf>, usize) {
     }
 
     (roots, total)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn config_without_max_file_size_gets_default() {
+        // Configs written before max_file_size existed must still load.
+        let json = r#"{"roots": ["/a"], "history_path": "/h"}"#;
+        let cfg: Config = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.max_file_size, 10 * 1024 * 1024);
+    }
+
+    #[test]
+    fn downloads_is_never_a_root_but_its_projects_are() {
+        let home = TempDir::new().unwrap();
+        let downloads = home.path().join("Downloads");
+        for p in ["repo-a", "repo-b"] {
+            fs::create_dir_all(downloads.join(p).join(".git")).unwrap();
+        }
+        fs::create_dir_all(downloads.join("not-a-project")).unwrap();
+
+        let (mut roots, count) = discover_roots(home.path());
+        roots.sort();
+
+        assert_eq!(roots, vec![downloads.join("repo-a"), downloads.join("repo-b")]);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn code_hub_with_two_projects_is_a_root() {
+        let home = TempDir::new().unwrap();
+        let hub = home.path().join("Codebase");
+        for p in ["x", "y"] {
+            fs::create_dir_all(hub.join(p).join(".git")).unwrap();
+        }
+        let (roots, _) = discover_roots(home.path());
+        assert_eq!(roots, vec![hub]);
+    }
 }

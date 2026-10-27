@@ -114,6 +114,10 @@ Everything inside your project roots **except**:
 | ⚙️ Compiled binaries | `.o`, `.dylib`, `.class`, `.exe`, `.dll` |
 | 🔒 Lockfiles | `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml` |
 | 💻 OS files | `.DS_Store`, `Thumbs.db` |
+| ⬇️ Partial downloads | `.crdownload`, `.part`, `.partial`, `.download` |
+| 🐘 Large files | Anything over 10 MB: videos, disk images, archives, growing logs. Change `max_file_size` in `~/.temprix/config.json`. |
+
+`Downloads` and `Desktop` are never watched as a whole. Projects inside them are watched individually.
 
 ## 📋 Requirements
 

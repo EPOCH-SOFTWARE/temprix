@@ -79,7 +79,17 @@ extern "C" fn handle_signal(_sig: libc::c_int) {
     SHUTDOWN.store(true, Ordering::SeqCst);
 }
 
-fn run_daemon(roots: Vec<PathBuf>, history_path: PathBuf) {
+fn format_size(bytes: u64) -> String {
+    if bytes < 1024 {
+        format!("{} B", bytes)
+    } else if bytes < 1024 * 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{:.1} MB", bytes as f64 / 1024.0 / 1024.0)
+    }
+}
+
+fn run_daemon(roots: Vec<PathBuf>, history_path: PathBuf, max_file_size: u64) {
     // Register signal handlers
     unsafe {
         libc::signal(libc::SIGINT, handle_signal as libc::sighandler_t);
@@ -111,6 +121,8 @@ fn run_daemon(roots: Vec<PathBuf>, history_path: PathBuf) {
 
     let mut resolver = Resolver::new();
     let mut dirty: HashSet<PathBuf> = HashSet::new();
+    // A growing file fires an event every batch; log the skip once, not per event.
+    let mut reported_oversize: HashSet<PathBuf> = HashSet::new();
     let mut last_event = Instant::now();
     let batch_window = Duration::from_millis(100);
 
@@ -142,6 +154,17 @@ fn run_daemon(roots: Vec<PathBuf>, history_path: PathBuf) {
                     Err(_) => continue,
                 };
                 if meta.is_dir() || meta.len() == 0 {
+                    continue;
+                }
+                if meta.len() > max_file_size {
+                    if reported_oversize.insert(file_path.clone()) {
+                        eprintln!(
+                            "  \x1b[33mskip\x1b[0m    {} ({} > {} limit)",
+                            file_path.display(),
+                            format_size(meta.len()),
+                            format_size(max_file_size),
+                        );
+                    }
                     continue;
                 }
 
@@ -304,14 +327,7 @@ fn main() {
             eprintln!();
 
             for (i, v) in versions.iter().enumerate() {
-                let size = if v.size < 1024 {
-                    format!("{} B", v.size)
-                } else if v.size < 1024 * 1024 {
-                    format!("{:.1} KB", v.size as f64 / 1024.0)
-                } else {
-                    format!("{:.1} MB", v.size as f64 / 1024.0 / 1024.0)
-                };
-
+                let size = format_size(v.size);
                 let label = if i == 0 { " (latest)" } else { "" };
                 eprintln!(
                     "  \x1b[2m{:>3}\x1b[0m  {}  \x1b[2m{}\x1b[0m{}",
@@ -446,7 +462,11 @@ fn main() {
             eprintln!("  \x1b[2mHistory: {}\x1b[0m", cfg.history_path.display());
             eprintln!();
 
-            run_daemon(cfg.roots, cfg.history_path);
+            eprintln!(
+                "  \x1b[2mSkipping files over {}\x1b[0m",
+                format_size(cfg.max_file_size)
+            );
+            run_daemon(cfg.roots, cfg.history_path, cfg.max_file_size);
         }
     }
 }

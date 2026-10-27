@@ -1,10 +1,3 @@
-mod clone;
-mod config;
-mod daemon;
-mod exclude;
-mod history;
-mod markers;
-mod resolve;
 
 use clap::{Parser, Subcommand};
 use notify::{Config as NotifyConfig, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
@@ -15,7 +8,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use std::{fs, process};
 
-use resolve::Resolver;
+use temprix::resolve::Resolver;
+use temprix::{clone, config, daemon, exclude, finder, history};
 
 // ─── Timestamp ──────────────────────────────────────────────────────
 
@@ -214,6 +208,12 @@ enum Commands {
         #[arg(short, long)]
         version: Option<usize>,
     },
+    /// Open history in Finder: a file's versions, or a folder's history
+    /// (including files deleted from it). Used by the Finder menu item.
+    Reveal {
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+    },
     /// Manage watched root directories
     Roots {
         #[command(subcommand)]
@@ -289,6 +289,18 @@ fn main() {
                 Err(e) => eprintln!("  \x1b[33m!\x1b[0m {}", e),
             }
         }
+
+        Commands::Reveal { paths } => match finder::reveal(&paths) {
+            Ok(missing) => {
+                for name in missing {
+                    eprintln!("No history for {}", name);
+                }
+            }
+            Err(e) => {
+                eprintln!("{}", e);
+                process::exit(1);
+            }
+        },
 
         Commands::Status => {
             let cfg = config::load_or_discover();

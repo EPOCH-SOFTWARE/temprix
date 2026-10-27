@@ -92,6 +92,7 @@ temprix status               # 📊 Show daemon status and watched roots
 
 temprix history <file>       # 📜 List all versions of a file
 temprix restore <file> -v N  # ⏪ Restore to version N (auto-saves current state first)
+temprix reveal <path>...     # 🖱️ Open history in Finder (file: its versions; folder: incl. deleted files)
 
 temprix roots list           # 📂 Show watched root directories
 temprix roots add <path>     # ➕ Add a root

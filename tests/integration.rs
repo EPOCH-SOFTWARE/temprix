@@ -1,7 +1,7 @@
 //! Integration tests for TEMPRIX.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -9,9 +9,18 @@ fn temprix_bin() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_temprix"))
 }
 
+/// The CLI with HOME pointed at `home`. temprix reads and rewrites
+/// ~/.temprix/config.json, so tests must never see the real HOME.
+fn temprix(home: &Path) -> Command {
+    let mut cmd = Command::new(temprix_bin());
+    cmd.env("HOME", home);
+    cmd
+}
+
 #[test]
 fn scan_discovers_projects() {
-    let output = Command::new(temprix_bin())
+    let home = TempDir::new().unwrap();
+    let output = temprix(home.path())
         .arg("scan")
         .output()
         .unwrap();
@@ -23,7 +32,8 @@ fn scan_discovers_projects() {
 
 #[test]
 fn status_reports_state() {
-    let output = Command::new(temprix_bin())
+    let home = TempDir::new().unwrap();
+    let output = temprix(home.path())
         .arg("status")
         .output()
         .unwrap();
@@ -44,7 +54,7 @@ fn history_no_versions_for_new_file() {
     let file = project.join("src").join("new.js");
     fs::write(&file, "brand new").unwrap();
 
-    let output = Command::new(temprix_bin())
+    let output = temprix(tmp.path())
         .arg("history")
         .arg(&file)
         .output()
@@ -64,7 +74,7 @@ fn restore_invalid_version_number() {
     let file = project.join("app.txt");
     fs::write(&file, "content").unwrap();
 
-    let output = Command::new(temprix_bin())
+    let output = temprix(tmp.path())
         .arg("restore")
         .arg(&file)
         .args(["--version", "99"])
@@ -79,7 +89,8 @@ fn restore_invalid_version_number() {
 
 #[test]
 fn roots_list_works() {
-    let output = Command::new(temprix_bin())
+    let home = TempDir::new().unwrap();
+    let output = temprix(home.path())
         .args(["roots", "list"])
         .output()
         .unwrap();
@@ -88,7 +99,8 @@ fn roots_list_works() {
 
 #[test]
 fn help_shows_all_commands() {
-    let output = Command::new(temprix_bin())
+    let home = TempDir::new().unwrap();
+    let output = temprix(home.path())
         .arg("--help")
         .output()
         .unwrap();

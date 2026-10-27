@@ -21,6 +21,9 @@ const FILES: &[&str] = &[
 const EXTS: &[&str] = &[
     "pyc", "pyo", "o", "a", "dylib", "so", "class",
     "jar", "war", "dll", "exe", "obj",
+    // In-progress downloads: rewritten continuously, renamed when done.
+    // Versioning them snapshots the same growing file over and over.
+    "crdownload", "part", "partial", "download",
 ];
 
 #[cfg(test)]
@@ -57,6 +60,13 @@ mod tests {
         assert!(is_excluded(Path::new("lib.dylib")));
         assert!(is_excluded(Path::new("module.pyc")));
         assert!(is_excluded(Path::new("App.class")));
+    }
+
+    #[test]
+    fn excludes_partial_downloads() {
+        assert!(is_excluded(Path::new("movie.mp4.crdownload")));
+        assert!(is_excluded(Path::new("ubuntu.iso.part")));
+        assert!(is_excluded(Path::new("installer.dmg.download")));
     }
 
     #[test]

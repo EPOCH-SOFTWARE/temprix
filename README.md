@@ -6,7 +6,7 @@
     No disk overhead · No CPU usage · No configuration
   </p>
   <p align="center">
-    <a href="#install">📦 Install</a> · <a href="#commands">⌨️ Commands</a> · <a href="#how-it-works">🔍 How It Works</a> · <a href="LICENSE">📄 License</a>
+    <a href="#install">📦 Install</a> · <a href="#finder">🖱️ Finder</a> · <a href="#commands">⌨️ Commands</a> · <a href="#how-it-works">🔍 How It Works</a> · <a href="LICENSE">📄 License</a>
   </p>
 </p>
 
@@ -44,20 +44,30 @@ Benchmarked on Apple Silicon, 100 iterations per file size:
 
 ## 📦 Install
 
+**⬇️ Download:** get `TEMPRIX-<version>.zip` from [Releases](https://github.com/EPOCH-SOFTWARE/temprix/releases), unzip it, drag **TEMPRIX** into Applications, and open it. It finds your projects, starts watching, and adds **Show TEMPRIX History** to Finder's right-click menu. Signed and notarized by Apple; runs on Apple Silicon and Intel.
+
+> Open it from Applications, not straight from Downloads: macOS runs apps opened from a download in a temporary location, and TEMPRIX will ask you to move it first.
+
+The command-line tool is inside the app. To use it from a terminal:
+
 ```bash
-# Build from source
+ln -s /Applications/TEMPRIX.app/Contents/MacOS/temprix ~/.local/bin/temprix
+```
+
+**🛠️ Build from source:**
+
+```bash
 git clone https://github.com/EPOCH-SOFTWARE/temprix.git
 cd temprix
-cargo build --release
 
-# Copy to PATH
-cp target/release/temprix ~/.local/bin/
-
-# Install (auto-discovers projects, starts on login, runs forever)
-temprix install
+# Builds TEMPRIX.app into ~/Applications, links `temprix` into ~/.local/bin,
+# enables the Finder menu item, discovers projects, starts the daemon
+make install
 ```
 
 That's it. You never touch it again.
+
+**🗑️ Uninstall:** run `temprix uninstall`, then move TEMPRIX to the Trash (or `make uninstall` for a source build). Your history in `~/.temprix` is kept.
 
 ## 🔍 How It Works
 
@@ -83,6 +93,21 @@ That's it. You never touch it again.
 
 > 🛡️ Delete your project folder — versions survive in `~/.temprix/history/`.
 
+## 🖱️ Finder
+
+Right-click any file or folder → **Show TEMPRIX History**. It sits in the main menu, not under Quick Actions.
+
+| You right-click | What opens |
+|---|---|
+| 📄 **One file** | A folder holding only that file's versions, named like `2026-10-27 12.43.01 content.pdf`, newest selected. Press Space to Quick Look, then arrow keys to step through versions. Drag one out to keep it. |
+| 📁 **One folder** (or a folder window's empty background) | That folder's history, including versions of files since deleted from it. |
+| 🗂️ **Several items** | One window: a subfolder of versions per file, a link to each folder's history. Items without history are skipped. |
+| 🤷 **Nothing with history** | The standard alert sound. No window, no notification. |
+
+The version folder is built from APFS clones in `~/.temprix/views/`, so it takes no extra disk space. It's rebuilt each time you open it; deleting it never affects your history.
+
+> The menu item is a Finder Sync extension inside `TEMPRIX.app`. macOS runs extensions in a sandbox that can't run the CLI, so the click is forwarded as a `temprix://reveal` URL to the app, which runs `temprix reveal` and quits. When nothing has history, the reason is in `log show --predicate 'subsystem == "com.temprix.app"'`. If the item doesn't appear, check it's switched on in System Settings → General → Login Items & Extensions.
+
 ## ⌨️ Commands
 
 ```bash
@@ -92,6 +117,7 @@ temprix status               # 📊 Show daemon status and watched roots
 
 temprix history <file>       # 📜 List all versions of a file
 temprix restore <file> -v N  # ⏪ Restore to version N (auto-saves current state first)
+temprix reveal <path>...     # 🖱️ Open history in Finder (file: its versions; folder: incl. deleted files)
 
 temprix roots list           # 📂 Show watched root directories
 temprix roots add <path>     # ➕ Add a root
@@ -114,11 +140,15 @@ Everything inside your project roots **except**:
 | ⚙️ Compiled binaries | `.o`, `.dylib`, `.class`, `.exe`, `.dll` |
 | 🔒 Lockfiles | `package-lock.json`, `yarn.lock`, `pnpm-lock.yaml` |
 | 💻 OS files | `.DS_Store`, `Thumbs.db` |
+| ⬇️ Partial downloads | `.crdownload`, `.part`, `.partial`, `.download` |
+| 🐘 Large files | Anything over 10 MB: videos, disk images, archives, growing logs. Change `max_file_size` in `~/.temprix/config.json`. |
+
+`Downloads` and `Desktop` are never watched as a whole. Projects inside them are watched individually.
 
 ## 📋 Requirements
 
-- 🍎 macOS 10.13+ (APFS required — default since High Sierra 2017)
-- 🦀 Rust 1.70+ (to build from source)
+- 🍎 macOS 12+ on APFS (the default file system since High Sierra, 2017)
+- 🦀 To build: Rust stable (built and tested with 1.87) and Xcode Command Line Tools, for `swiftc` (builds the Finder extension)
 
 ## 🆚 How is this different from...
 
@@ -149,7 +179,22 @@ macOS kernel (FSEvents)
   ~/.temprix/history/<project>/<path>_<timestamp>.<ext>
 ```
 
-> 6 source files · 1 dependency (`notify` for FSEvents) · 643 KB binary · No runtime
+> 10 Rust files + 2 Swift files (the Finder menu item) · 5 dependencies · 708 KB CLI on Apple Silicon · No runtime
+
+## 🚢 Releasing
+
+`make release` builds `dist/TEMPRIX-<version>.zip`: a universal app (Apple Silicon and Intel), signed with your Developer ID, notarized by Apple, with the ticket stapled so it opens without Gatekeeper reaching Apple. It runs the tests first and checks the hardened runtime, timestamp and team signature before uploading.
+
+One-time setup:
+
+1. **Developer ID certificate.** Xcode → Settings → Accounts → your team → Manage Certificates → **+** → **Developer ID Application**. Only the team's Account Holder can create one.
+2. **Notarization credentials.** Create an app-specific password at [account.apple.com](https://account.apple.com) → Sign-In and Security, then save it in your keychain:
+   ```bash
+   xcrun notarytool store-credentials temprix-notary --apple-id <your Apple ID> --team-id <TEAMID>
+   ```
+3. **Intel target for Rust:** `rustup target add x86_64-apple-darwin`
+
+`make release NOTARIZE=0` signs without notarizing; `make release DRY_RUN=1` tests the whole pipeline with an ad-hoc signature, no certificate needed. Set the version in `Cargo.toml`.
 
 ## 📄 License
 

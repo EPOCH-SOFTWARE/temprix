@@ -44,6 +44,16 @@ Benchmarked on Apple Silicon, 100 iterations per file size:
 
 ## 📦 Install
 
+**⬇️ Download:** get `TEMPRIX-<version>.zip` from [Releases](https://github.com/EPOCH-SOFTWARE/temprix/releases), unzip it, drag **TEMPRIX** into Applications, and open it. It finds your projects, starts watching, and adds **Show TEMPRIX History** to Finder's right-click menu. Signed and notarized by Apple; runs on Apple Silicon and Intel.
+
+> Open it from Applications, not straight from Downloads: macOS runs apps opened from a download in a temporary location, and TEMPRIX will ask you to move it first.
+
+The command-line tool is inside the app. To use it from a terminal:
+
+```bash
+ln -s /Applications/TEMPRIX.app/Contents/MacOS/temprix ~/.local/bin/temprix
+```
+
 **🛠️ Build from source:**
 
 ```bash
@@ -170,6 +180,21 @@ macOS kernel (FSEvents)
 ```
 
 > 10 Rust files + 2 Swift files (the Finder menu item) · 5 dependencies · 708 KB CLI on Apple Silicon · No runtime
+
+## 🚢 Releasing
+
+`make release` builds `dist/TEMPRIX-<version>.zip`: a universal app (Apple Silicon and Intel), signed with your Developer ID, notarized by Apple, with the ticket stapled so it opens without Gatekeeper reaching Apple. It runs the tests first and checks the hardened runtime, timestamp and team signature before uploading.
+
+One-time setup:
+
+1. **Developer ID certificate.** Xcode → Settings → Accounts → your team → Manage Certificates → **+** → **Developer ID Application**. Only the team's Account Holder can create one.
+2. **Notarization credentials.** Create an app-specific password at [account.apple.com](https://account.apple.com) → Sign-In and Security, then save it in your keychain:
+   ```bash
+   xcrun notarytool store-credentials temprix-notary --apple-id <your Apple ID> --team-id <TEAMID>
+   ```
+3. **Intel target for Rust:** `rustup target add x86_64-apple-darwin`
+
+`make release NOTARIZE=0` signs without notarizing; `make release DRY_RUN=1` tests the whole pipeline with an ad-hoc signature, no certificate needed. Set the version in `Cargo.toml`.
 
 ## 📄 License
 

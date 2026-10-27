@@ -5,6 +5,8 @@
 #   make install     install TEMPRIX.app, put `temprix` on PATH, enable the
 #                    Finder menu item, (re)start the daemon
 #   make uninstall   undo install; history in ~/.temprix is kept
+#   make release     universal, Developer ID signed, notarized, stapled
+#                    dist/TEMPRIX-<version>.zip (see macos/release.sh)
 #
 # Local builds are ad-hoc signed and run on this Mac only.
 
@@ -17,7 +19,7 @@ EXTENSION_ID  := com.temprix.app.finder
 APPEX          = $(INSTALL_APP)/Contents/PlugIns/TemprixFinder.appex
 LSREGISTER    := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: build test install uninstall
+.PHONY: build test install uninstall release
 
 build:
 	cargo build --release
@@ -51,3 +53,5 @@ uninstall:
 	rm -rf "$(INSTALL_APP)"
 	rm -f "$(BIN_DIR)/temprix"
 
+release:
+	macos/release.sh "$(VERSION)"
